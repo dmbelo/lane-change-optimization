@@ -1,4 +1,4 @@
-# NLP Lane Change
+# Lane Change Optimization
 A Non-Linear Programing Optimization formulation to optimize the control of an autonomous vehicle lane change.
 
 ## Optimization Formulation
