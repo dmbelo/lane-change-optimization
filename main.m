@@ -1,78 +1,67 @@
 clear 
 
-p = randn(1,3)*10+randn*5;
-ps = polyint(p);
-pd = polyder(p);
-pd2 = polyder(pd);
-x = linspace(0, 1, 500);
-y = polyval(p, x);
-dydx = polyval(pd, x);
-dy2dx2 = polyval(pd2, x);
-sydx = polyval(ps, x);
+NX = 3;
+R = 1;
+theta = linspace(0, pi/2, NX);
 
-xi = linspace(0, 1, 3);
-yi = polyval(p, xi);
-l = calcPolyLagrange(xi);
+w_road = 0.2; % width of road
+s_road = R * theta;
+x_road = R * sin(theta);
+x_road_left = (R + w_road/2)*sin(theta);
+x_road_right = (R - w_road/2)*sin(theta);
+y_road = R * cos(theta);
+y_road_left = (R + w_road/2)*cos(theta);
+y_road_right = (R - w_road/2)*cos(theta);
 
-F = double(subs(l, x));
-D = double(subs(diff(l), xi));
-D2 = double(subs(diff(diff(l)), xi));
-S = double(subs(int(l), xi));
+L = calcPolyLagrange(s_road);
 
-% Length
-dsdx = sqrt(1 + dydx.^2);
-s = cumtrapz(x, dsdx);
-dydx_li = yi * D;
-dsdx_li = sqrt(1 + dydx_li.^2);
-s_li = dsdx_li * S;
+D1 = double(subs(diff(L), s_road));
+D2 = double(subs(diff(diff(L)), s_road));
+S = double(subs(int(L), s_road(end)));
 
-s_err = (s(end) - s_li(end))/s(end);
-
+dx_road_ds = x_road * D1;
+dy_road_ds = y_road * D1;
+magnitude = sqrt(dx_road_ds.^2 + dy_road_ds.^2);
+T_road = [
+    dx_road_ds./magnitude
+    dy_road_ds./magnitude
+    ];
+ 
 % Curvature
-dy2dx2_li = yi * D2;
-k = dy2dx2./(1+dydx.^2).^1.5;
-k = sqrt(abs(k));
-k_li = dy2dx2_li./(1+dydx_li.^2).^1.5;
-k_li = sqrt(abs(k_li));
-sk = cumtrapz(x, k);
-sk_li = k_li * S;
+k_road = ((x_road * D1) .* (y_road * D2) - (y_road * D1) .* (x_road * D2)) ./ ...
+    ((x_road * D1).^2 + (y_road * D1).^2).^(3/2);
 
-k_err = (sk(end) - sk_li(end))/sk(end);
+objFun = @(x) abs(curvature(x_road, y_road, T_road, x, D1, D2)) * S;
+x0 = zeros(1, NX); % Initial guess is the car at center of road
 
-subplot(321)
-plot(x, y, x, yi * F, xi, yi, 'o')
-xlabel('x')
-ylabel('y')
-legend('Exact','Lagrange Approx','Collocation Points')
+[x_car, y_car] = position(x_road, y_road, T_road, x0);
+k_car = curvature(x_road, y_road, T_road, x0, D1, D2);
 
-subplot(322)
-plot(x, dydx, xi, dydx_li, 'o')
-legend('Exact','Lagrange Approx')
-xlabel('x')
-ylabel('dydx')
+A = [];
+b = [];
+Aeq = [];
+beq = [];
+lb = -w_road/2*ones(1, NX);
+ub = w_road/2*ones(1, NX);
+nonlcon = [];
 
-subplot(323)
-plot(x, dsdx, x, dsdx_li * F, xi, dsdx_li, 'o')
-xlabel('x')
-ylabel('dsdx')
-legend('Exact','Lagrange Approximation','Collocation Points')
+options = optimoptions('fmincon', 'Display', 'iter', 'Algorithm', 'interior-point');
 
-subplot(324)
-plot(x, s, xi, s_li, 'o')
-text(0.02, 0.9,['Error: ' num2str(s_err*100, '%2.4f'), '%'], 'Units', 'normalized')
-legend('Exact','Lagrange Approx')
-xlabel('x')
-ylabel('s')
+xOpt = fmincon(objFun, x0, A, b, Aeq, beq, lb, ub, nonlcon, options);
 
-subplot(325)
-plot(x, k, x, k_li * F, xi, k_li, 'o')
-xlabel('x')
-ylabel('Curvature')
-legend('Exact','Lagrange Approximation','Collocation Points')
+[x_car_opt, y_car_opt] = position(x_road, y_road, T_road, xOpt);
+k_car_opt = curvature(x_road, y_road, T_road, xOpt, D1, D2);
 
-subplot(326)
-plot(x, sk, xi, sk_li, 'o')
-text(0.02, 0.9,['Error: ' num2str(k_err*100, '%2.4f'), '%'], 'Units', 'normalized')
-legend('Exact','Lagrange Approx')
-xlabel('x')
-ylabel('Integral of Curvature')
+figure(1)
+plot(x_road, y_road, 'k--', ...
+     x_road_left, y_road_left, 'k', ...
+     x_road_right, y_road_right, 'k', ...
+     x_car, y_car, x_car_opt, y_car_opt)
+axis square
+legend({'Road Center','Road Left','Road Right','Car Initial Guess','Car Optimized'})
+
+figure(2)
+plot(s_road, k_road, s_road, k_car, s_road, k_car_opt)
+xlabel('sRoad (m)')
+ylabel('c (1/m)')
+legend({'Road','Car Initial Guess','Car Optimized'})
