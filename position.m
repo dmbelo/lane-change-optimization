@@ -1,6 +1,4 @@
-function [x, y] = position(x_road, y_road, T_road, d)
+function [x, y] = position(xr, yr, tx, ty, dy)
 
-% [x, y] = position(x_road, y_road, T_road, d)
-
-x = x_road - T_road(2,:).*d;
-y = y_road + T_road(1,:).*d;
+x = xr - tx.*dy;
+y = yr + ty.*dy;
